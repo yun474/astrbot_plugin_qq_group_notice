@@ -1,0 +1,81 @@
+{
+  "enabled": {
+    "description": "启用 QQ 群通知",
+    "type": "bool",
+    "default": true,
+    "hint": "总开关。关闭后仍会加载兼容桥，但不会发送任何通知。"
+  },
+  "enable_bot_join": {
+    "description": "机器人加入群聊时打招呼",
+    "type": "bool",
+    "default": true,
+    "hint": "处理 GROUP_ADD_ROBOT。"
+  },
+  "bot_join_message": {
+    "description": "机器人入群消息",
+    "type": "text",
+    "default": "大家好，云云来啦～以后请多关照。",
+    "hint": "支持 README 中列出的占位符，例如 {group_name}、{operator_nickname}、{bot_name}。"
+  },
+  "enable_member_join": {
+    "description": "成员进群欢迎",
+    "type": "bool",
+    "default": true,
+    "hint": "处理 GROUP_MEMBER_ADD。是否下发该事件最终由 QQ 开放平台决定。"
+  },
+  "member_join_message": {
+    "description": "成员进群消息",
+    "type": "text",
+    "default": "欢迎 {member_display} 加入 {group_display}！",
+    "hint": "可用 {member_at} 尝试 @ 新成员；昵称拿不到时 member_display 自动回退到 OpenID。"
+  },
+  "enable_member_leave": {
+    "description": "成员退群通知",
+    "type": "bool",
+    "default": true,
+    "hint": "处理 GROUP_MEMBER_REMOVE。"
+  },
+  "member_leave_message": {
+    "description": "成员退群消息",
+    "type": "text",
+    "default": "{member_display} 已退出 {group_display}。",
+    "hint": "支持 README 中列出的全部占位符。"
+  },
+  "group_filter_mode": {
+    "description": "群过滤模式",
+    "type": "string",
+    "options": ["disabled", "blacklist", "whitelist"],
+    "default": "disabled",
+    "hint": "disabled=所有群；blacklist=排除黑名单；whitelist=只允许白名单。列表填写群 OpenID，不是数字群号。"
+  },
+  "blacklist_groups": {
+    "description": "群黑名单",
+    "type": "text",
+    "default": "",
+    "hint": "填写 group_openid，支持逗号、空格或换行分隔。仅在 blacklist 模式生效。"
+  },
+  "whitelist_groups": {
+    "description": "群白名单",
+    "type": "text",
+    "default": "",
+    "hint": "填写 group_openid，支持逗号、空格或换行分隔。仅在 whitelist 模式生效。"
+  },
+  "group_aliases": {
+    "description": "群名称映射",
+    "type": "text",
+    "default": "",
+    "hint": "QQ 事件通常不带群名。可每行填写 group_openid=群名称，让 {group_name} 稳定显示自定义群名。"
+  },
+  "nickname_cache_size": {
+    "description": "昵称内存缓存上限",
+    "type": "int",
+    "default": 4096,
+    "hint": "从本次运行期间的普通群消息积累成员昵称。重启后清空，不保存聊天内容。"
+  },
+  "debug_log": {
+    "description": "调试日志",
+    "type": "bool",
+    "default": false,
+    "hint": "输出重复事件、过滤结果和昵称缓存异常，排查 QQ 是否下发事件时建议开启。"
+  }
+}
