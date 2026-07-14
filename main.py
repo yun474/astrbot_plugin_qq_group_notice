@@ -150,7 +150,7 @@ class QQGroupNoticePlugin(Star):
     def _template(self, notice_type: str) -> str:
         defaults = {
             "bot_join": "大家好，云云来啦～以后请多关照。",
-            "member_join": "欢迎 {member_display} 加入 {group_display}！",
+            "member_join": "欢迎 {member_at} 加入 {group_display}！",
             "member_leave": "{member_display} 已退出 {group_display}。",
         }
         key = {
@@ -217,12 +217,16 @@ class QQGroupNoticePlugin(Star):
             "member_nickname": member_name or member_id,
             "user_nickname": member_name or member_id,
             "member_display": member_display,
-            "member_at": f"<@{member_id}>" if member_id else "",
+            "member_at": (
+                f'<qqbot-at-user id="{member_id}" />' if member_id else ""
+            ),
             "operator_openid": operator_id,
             "op_member_openid": operator_id,
             "operator_nickname": operator_name or operator_id,
             "operator_display": operator_display,
-            "operator_at": f"<@{operator_id}>" if operator_id else "",
+            "operator_at": (
+                f'<qqbot-at-user id="{operator_id}" />' if operator_id else ""
+            ),
             "bot_name": self._bot_name(adapter),
         }
 
@@ -250,7 +254,8 @@ class QQGroupNoticePlugin(Star):
                 )
             return
 
-        content = SafeTemplate.render(self._template(notice_type), values)
+        template = self._template(notice_type)
+        content = SafeTemplate.render(template, values)
         if not content:
             if self.debug:
                 logger.info(f"[QQ群通知] 消息模板为空，跳过：type={notice_type}")
@@ -262,11 +267,13 @@ class QQGroupNoticePlugin(Star):
             logger.error("[QQ群通知] QQ 官方发送 API 尚未就绪。")
             return
 
-        payload: dict[str, Any] = {
-            "group_openid": group_id,
-            "msg_type": 0,
-            "content": content,
-        }
+        uses_at = "<qqbot-at-user" in content
+        payload: dict[str, Any] = {"group_openid": group_id}
+        if uses_at:
+            # QQ 官方的新 @ 标签用 Markdown 发送最稳定；普通文本可能显示裸 ID。
+            payload.update(msg_type=2, markdown={"content": content})
+        else:
+            payload.update(msg_type=0, content=content)
         # QQ 群消息接口不接受 GROUP_MEMBER_REMOVE 作为被动回复事件，
         # 退群通知必须走主动消息；入群打招呼/欢迎仍保留事件上下文。
         if event_id and notice_type != "member_leave":
@@ -284,6 +291,29 @@ class QQGroupNoticePlugin(Star):
                 f"[QQ群通知] 已用兼容模式发送：type={notice_type}, group={group_id}"
             )
         except Exception as exc:
+            if uses_at:
+                fallback_values = {
+                    **values,
+                    "member_at": values["member_display"],
+                    "operator_at": values["operator_display"],
+                }
+                fallback_content = SafeTemplate.render(template, fallback_values)
+                fallback_payload: dict[str, Any] = {
+                    "group_openid": group_id,
+                    "msg_type": 0,
+                    "content": fallback_content,
+                }
+                if event_id and notice_type != "member_leave":
+                    fallback_payload["event_id"] = event_id
+                try:
+                    await api.post_group_message(**fallback_payload)
+                    logger.warning(
+                        f"[QQ群通知] Markdown @ 发送失败，已降级为普通文本："
+                        f"type={notice_type}, group={group_id}, error={exc}"
+                    )
+                    return
+                except Exception as fallback_exc:
+                    exc = fallback_exc
             logger.error(
                 f"[QQ群通知] 发送失败：type={notice_type}, group={group_id}, error={exc}"
             )

@@ -26,6 +26,14 @@ class FakeAPI:
         return {"id": "sent"}
 
 
+class FailingMarkdownAPI(FakeAPI):
+    async def post_group_message(self, **payload):
+        self.calls.append(payload)
+        if payload.get("msg_type") == 2:
+            raise RuntimeError("markdown denied")
+        return {"id": "sent"}
+
+
 class MainLogicTests(unittest.IsolatedAsyncioTestCase):
     def make_plugin(self, config):
         plugin = QQGroupNoticePlugin.__new__(QQGroupNoticePlugin)
@@ -50,6 +58,14 @@ class MainLogicTests(unittest.IsolatedAsyncioTestCase):
         await plugin.on_plugin_loaded(types.SimpleNamespace(name="anything"))
 
         self.assertEqual(calls, [plugin.context])
+
+    def test_default_member_join_template_uses_member_at(self):
+        plugin = self.make_plugin({})
+
+        self.assertEqual(
+            plugin._template("member_join"),
+            "欢迎 {member_at} 加入 {group_display}！",
+        )
 
     async def test_member_join_renders_names_and_sends_with_event_id(self):
         plugin = self.make_plugin(
@@ -77,6 +93,68 @@ class MainLogicTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(api.calls), 1)
         self.assertEqual(api.calls[0]["content"], "欢迎 新人 来到 测试群")
         self.assertEqual(api.calls[0]["event_id"], "evt")
+
+    async def test_member_at_uses_official_markdown_tag(self):
+        plugin = self.make_plugin(
+            {
+                "enabled": True,
+                "enable_member_join": True,
+                "member_join_message": "欢迎 {member_at} 加入群聊",
+            }
+        )
+        api = FakeAPI()
+        event = types.SimpleNamespace(
+            _api=api,
+            event_id="evt-at",
+            timestamp="",
+            group_openid="group",
+            member_openid="member",
+            op_member_openid="",
+            raw_data={},
+        )
+
+        await plugin._handle_notice(
+            "member_join",
+            event,
+            types.SimpleNamespace(client=types.SimpleNamespace(robot=None)),
+        )
+
+        self.assertEqual(api.calls[0]["msg_type"], 2)
+        self.assertEqual(
+            api.calls[0]["markdown"]["content"],
+            '欢迎 <qqbot-at-user id="member" /> 加入群聊',
+        )
+        self.assertNotIn("content", api.calls[0])
+
+    async def test_member_at_falls_back_without_raw_tag(self):
+        plugin = self.make_plugin(
+            {
+                "enabled": True,
+                "enable_member_join": True,
+                "member_join_message": "欢迎 {member_at} 加入群聊",
+            }
+        )
+        api = FailingMarkdownAPI()
+        event = types.SimpleNamespace(
+            _api=api,
+            event_id="evt-at-fallback",
+            timestamp="",
+            group_openid="group",
+            member_openid="member",
+            op_member_openid="",
+            raw_data={},
+        )
+
+        await plugin._handle_notice(
+            "member_join",
+            event,
+            types.SimpleNamespace(client=types.SimpleNamespace(robot=None)),
+        )
+
+        self.assertEqual(len(api.calls), 2)
+        self.assertEqual(api.calls[1]["msg_type"], 0)
+        self.assertEqual(api.calls[1]["content"], "欢迎 member 加入群聊")
+        self.assertNotIn("qqbot-at-user", api.calls[1]["content"])
 
     async def test_blacklist_blocks_send(self):
         plugin = self.make_plugin(

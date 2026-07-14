@@ -26,8 +26,8 @@
   "member_join_message": {
     "description": "成员进群消息",
     "type": "text",
-    "default": "欢迎 {member_display} 加入 {group_display}！",
-    "hint": "可用 {member_at} 尝试 @ 新成员；昵称拿不到时 member_display 自动回退到 OpenID。"
+    "default": "欢迎 {member_at} 加入 {group_display}！",
+    "hint": "默认使用 {member_at} 真正 @ 新成员；发送失败时自动回退到昵称或 OpenID。"
   },
   "enable_member_leave": {
     "description": "成员退群通知",
