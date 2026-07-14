@@ -36,6 +36,21 @@ class MainLogicTests(unittest.IsolatedAsyncioTestCase):
         plugin.debug = False
         return plugin
 
+    async def test_plugin_loaded_hook_binds_existing_platforms(self):
+        calls = []
+
+        class FakeBridge:
+            async def bind_platforms(self, context):
+                calls.append(context)
+
+        plugin = QQGroupNoticePlugin.__new__(QQGroupNoticePlugin)
+        plugin.context = object()
+        plugin.bridge = FakeBridge()
+
+        await plugin.on_plugin_loaded(types.SimpleNamespace(name="anything"))
+
+        self.assertEqual(calls, [plugin.context])
+
     async def test_member_join_renders_names_and_sends_with_event_id(self):
         plugin = self.make_plugin(
             {
@@ -89,6 +104,32 @@ class MainLogicTests(unittest.IsolatedAsyncioTestCase):
             types.SimpleNamespace(client=types.SimpleNamespace(robot=None)),
         )
         self.assertEqual(api.calls, [])
+
+    async def test_member_leave_is_sent_as_proactive_message(self):
+        plugin = self.make_plugin(
+            {
+                "enabled": True,
+                "enable_member_leave": True,
+                "member_leave_message": "{member_openid} 退群了",
+            }
+        )
+        api = FakeAPI()
+        event = types.SimpleNamespace(
+            _api=api,
+            event_id="evt-leave",
+            timestamp="1710000000",
+            group_openid="group",
+            member_openid="member",
+            op_member_openid="operator",
+            raw_data={},
+        )
+        adapter = types.SimpleNamespace(client=types.SimpleNamespace(robot=None))
+
+        await plugin._handle_notice("member_leave", event, adapter)
+
+        self.assertEqual(len(api.calls), 1)
+        self.assertEqual(api.calls[0]["content"], "member 退群了")
+        self.assertNotIn("event_id", api.calls[0])
 
 
 if __name__ == "__main__":

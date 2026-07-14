@@ -87,6 +87,11 @@ class QQGroupNoticePlugin(Star):
     async def on_astrbot_loaded(self) -> None:
         await self.bridge.bind_platforms(self.context)
 
+    @filter.on_plugin_loaded()
+    async def on_plugin_loaded(self, _metadata: Any) -> None:
+        """兼容在 AstrBot 已启动后安装、更新或热重载本插件。"""
+        await self.bridge.bind_platforms(self.context)
+
     @filter.event_message_type(filter.EventMessageType.ALL, priority=-1000)
     async def cache_visible_names(self, event: AstrMessageEvent) -> None:
         """从普通群消息尽力积累群员昵称和群名称。"""
@@ -262,7 +267,9 @@ class QQGroupNoticePlugin(Star):
             "msg_type": 0,
             "content": content,
         }
-        if event_id:
+        # QQ 群消息接口不接受 GROUP_MEMBER_REMOVE 作为被动回复事件，
+        # 退群通知必须走主动消息；入群打招呼/欢迎仍保留事件上下文。
+        if event_id and notice_type != "member_leave":
             payload["event_id"] = event_id
         try:
             await api.post_group_message(**payload)
