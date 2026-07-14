@@ -10,6 +10,7 @@ from core.events import QQGroupMemberEvent
 class FakeClient:
     def __init__(self):
         self.original_calls = 0
+        self.intents = 1 << 25
 
     async def on_group_add_robot(self, event):
         self.original_calls += 1
@@ -45,15 +46,35 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
         bridge = QQOfficialNoticeBridge(handler, lambda _: None)
 
         self.assertEqual(await bridge.bind_platforms(context), 1)
+        self.assertTrue(client.intents & bridge.GROUP_MEMBER_INTENT)
         event = object()
         await client.on_group_add_robot(event)
         self.assertEqual(received[0][:2], ("bot_join", event))
         self.assertEqual(client.original_calls, 1)
 
         await bridge.uninstall()
+        self.assertFalse(client.intents & bridge.GROUP_MEMBER_INTENT)
         await client.on_group_add_robot(event)
         self.assertEqual(client.original_calls, 2)
         self.assertEqual(client.on_group_add_robot.__func__, original.__func__)
+
+    async def test_binding_preserves_existing_intents(self):
+        async def handler(kind, event, adapter):
+            return None
+
+        client = FakeClient()
+        client.intents |= 1 << 30
+        adapter = FakeAdapter(client)
+        bridge = QQOfficialNoticeBridge(handler, lambda _: None)
+
+        await bridge.bind_platforms(
+            types.SimpleNamespace(platform_manager=FakeManager([adapter]))
+        )
+
+        self.assertTrue(client.intents & (1 << 25))
+        self.assertTrue(client.intents & (1 << 30))
+        self.assertTrue(client.intents & bridge.GROUP_MEMBER_INTENT)
+        await bridge.uninstall()
 
     async def test_binding_is_idempotent(self):
         async def handler(kind, event, adapter):

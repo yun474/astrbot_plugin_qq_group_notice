@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 1.0.2 - 2026-07-15
+
+- 修复 WebSocket 模式只安装事件解析器、却没有订阅 `GROUP_MEMBER` Intents（`1 << 24`），导致普通成员进退群事件根本不会下发的问题。
+- 启动时保留原有 Intents 并补充成员事件订阅位；若连接已建立，会明确提示重载 QQ 平台或重启 AstrBot。
+- README 补充 WebSocket 与 Webhook 的选择、HTTP 回调配置和事件权限说明。
+- 增加 Intents 合并回归测试。
+
 ## 1.0.1 - 2026-07-14
 
 - 修复从 AstrBot 管理面板安装、更新或热重载后，已有 QQ 官方平台实例没有接入通知回调的问题。

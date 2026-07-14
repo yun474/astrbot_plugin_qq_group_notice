@@ -32,6 +32,27 @@ AstrBot/data/plugins/astrbot_plugin_qq_group_notice
 
 NapCat/OneBot 等适配器不在本插件处理范围内。
 
+## WebSocket 和 HTTP 回调怎么选
+
+### 使用 `qq_official`（WebSocket）
+
+- **不需要**在 QQ 开放平台填写 HTTP 回调地址；
+- AstrBot 主动连接 QQ Gateway 接收事件；
+- 必须开启平台配置里的群聊/C2C 能力；
+- 本插件会在连接建立前补上普通群成员事件所需的 `GROUP_MEMBER` Intents（`1 << 24`）；
+- 首次安装或从旧版升级后，请完整重载 QQ 平台或重启 AstrBot。Intents 在连接握手时确定，只重载插件不一定能让现有连接立即生效。
+
+### 使用 `qq_official_webhook`（HTTP 回调）
+
+- QQ 官方已把 Webhook 作为后续维护方向；如果主人后台能正常配置事件监听，云云更推荐这一模式；
+- **需要**把 AstrBot 平台页显示的公网 HTTPS 回调地址填写到 QQ 开放平台；
+- 统一 Webhook 地址格式通常是 `https://你的域名/api/platform/webhook/{webhook_uuid}`；
+- 回调地址必须能从公网访问，并正确转发到 AstrBot WebUI 端口；
+- 在 QQ 开放平台的事件订阅中勾选机器人进群以及普通群成员加入/退出事件；
+- WebSocket 与 Webhook 选一种接收方式即可，不要把两个 AstrBot 平台实例同时打开，否则可能重复通知。
+
+如果 QQ 开放平台的可订阅事件列表里根本没有普通群成员加入/退出，说明当前机器人账号尚未获得该事件权限；插件无法凭空制造腾讯没有下发的事件。
+
 ## 配置示例
 
 机器人入群：

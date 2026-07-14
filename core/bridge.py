@@ -19,9 +19,17 @@ class _Binding:
     wrapper: Any
 
 
+@dataclass(slots=True)
+class _IntentPatch:
+    client: Any
+    original: int
+    patched: int
+
+
 class QQOfficialNoticeBridge:
     """为 AstrBot 原生 QQ 适配器补齐群生命周期回调。"""
 
+    GROUP_MEMBER_INTENT = 1 << 24
     SUPPORTED_PLATFORMS = {"qq_official", "qq_official_webhook"}
     CALLBACKS = {
         "group_add_robot": "bot_join",
@@ -33,6 +41,7 @@ class QQOfficialNoticeBridge:
         self.handler = handler
         self.log = log
         self._bindings: list[_Binding] = []
+        self._intent_patches: list[_IntentPatch] = []
         self._bound_clients: set[int] = set()
         self._adapters: list[Any] = []
         self._connection_state_cls: Any = None
@@ -89,12 +98,31 @@ class QQOfficialNoticeBridge:
             client = getattr(adapter, "client", None)
             if client is None or id(client) in self._bound_clients:
                 continue
+            self._enable_group_member_intent(client, adapter)
             self._bind_client(client, adapter)
             self._ensure_existing_parsers(adapter)
             self._bound_clients.add(id(client))
             self._adapters.append(adapter)
             count += 1
         return count
+
+    def _enable_group_member_intent(self, client: Any, adapter: Any) -> bool:
+        """在 WSS identify 前补上普通群成员进退事件订阅位。"""
+        if self._platform_name(adapter) != "qq_official":
+            return False
+        intents = getattr(client, "intents", None)
+        if not isinstance(intents, int):
+            self.log("[QQ群通知] 无法读取 QQ WebSocket Intents，成员进退事件可能不会下发。")
+            return False
+        if intents & self.GROUP_MEMBER_INTENT:
+            return False
+        patched = intents | self.GROUP_MEMBER_INTENT
+        client.intents = patched
+        self._intent_patches.append(_IntentPatch(client, intents, patched))
+        self.log("[QQ群通知] 已启用 GROUP_MEMBER Intents（1 << 24）。")
+        if getattr(client, "_connection", None) is not None:
+            self.log("[QQ群通知] QQ 连接已经建立，请重载 QQ 平台或重启 AstrBot 使新 Intents 生效。")
+        return True
 
     @staticmethod
     def _connections(adapter: Any) -> list[Any]:
@@ -165,6 +193,11 @@ class QQOfficialNoticeBridge:
                 setattr(binding.client, binding.attribute, binding.original)
         self._bindings.clear()
         self._bound_clients.clear()
+
+        for patch in reversed(self._intent_patches):
+            if getattr(patch.client, "intents", None) == patch.patched:
+                patch.client.intents = patch.original
+        self._intent_patches.clear()
 
         for adapter in self._adapters:
             for connection in self._connections(adapter):
